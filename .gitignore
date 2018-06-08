@@ -1,0 +1,8 @@
+.ipynb_checkpoints
+__pycache__
+data
+vehicles
+non-vehicles
+cut_test_video
+output_videos
+project_video.mp4
