@@ -1,37 +1,89 @@
 # Vehicle Detection
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
+## Overview
+This repository contains two classes for vehicle detection and tracking:
+1. `FeatureExtractor()`
+2. `Tracker()`
 
+## Usage
+To use the tracjer one needs:
+1. Trained classifier
+2. Fitted feature scaler
+3. Feature extractor
 
-In this project, your goal is to write a software pipeline to detect vehicles in a video (start with the test_video.mp4 and later implement on full project_video.mp4), but the main output or product we want you to create is a detailed writeup of the project.  Check out the [writeup template](https://github.com/udacity/CarND-Vehicle-Detection/blob/master/writeup_template.md) for this project and use it as a starting point for creating your own writeup.  
+Example code:
+```
+tracker = Tracker(classifier, feature_extractor, scaler, max_to_keep = 5, heat_threshold=3)
+tracker.set_track_params(step=step,
+                         hog_color_transform=cv2.COLOR_RGB2GRAY,
+                         color_transform = cv2.COLOR_RGB2BGR,
+                         scale_dict=scale_dict, feature_types=ftypes, hist_channels=hist_ch, init_size=init_size, single_threshold=2)
+img_with_detections = tracker.track(img)
+```
 
-Creating a great writeup:
----
-A great writeup should include the rubric points as well as your description of how you addressed each point.  You should include a detailed description of the code used in each step (with line-number references and code snippets where necessary), and links to other supporting documents or external references.  You should include images in your writeup to demonstrate how your code works with examples.  
+`max_to_keep` - number of frames used to filter out wrong detections
+`heat_threshold` - number of detections in the sema region over several videoframe for detection to be considered as true
+`step` - sliding window step
+`hog_color_transform` - color transform used to get 1-channel image for HOG feature extraction
+`color_transform` - color transform used for spatial features and histogram features
+`scale_dict` - dictionary in format `{scale: (xmin. ymin, xmax, ymax)}` where `(xmin, ymin, xmax, ymax)` - region of search for a given `scale`
+`hist_channels` - channels of image (after color tansform, if any) used for getting histogram features
+`init_size` - image size used for training classifier
+`single_threshold` - threshold used for filtering each image for different scales detections
 
-All that said, please be concise!  We're not looking for you to write a book here, just a brief description of how you passed each rubric point, and references to the relevant code :). 
+## Feature extraction
 
-You can submit your writeup in markdown or use another method and submit a pdf instead.
+Class *FeatureExtractor* implements two basic things: generate features and labels of small images used for training a classifier and for getting features from 'big' image for sliding window object detection.
 
-The Project
----
+Example code:
+```
+feature_extractor = FeatureExtractor()
 
-The goals / steps of this project are the following:
+# usage for training a classifier:
+features, labels = feature_extractor.return_features_and_labels(class_files, class_label, feature_types=['HOG'],
+							                                   hog_color_transform=None, hog_pix_per_cell=8, hog_cell_per_block=2, hog_orient=9,
+							                                   hog_feature_vec=True, hog_vis=False,
+							                                   color_transform_flag=None, spat_size=(32,32),
+							                                   hist_channels=[0], hist_nbins=32, hist_bins_range=(0,256)))
 
-* Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images and train a classifier Linear SVM classifier
-* Optionally, you can also apply a color transform and append binned color features, as well as histograms of color, to your HOG feature vector. 
-* Note: for those first two steps don't forget to normalize your features and randomize a selection for training and testing.
-* Implement a sliding-window technique and use your trained classifier to search for vehicles in images.
-* Run your pipeline on a video stream (start with the test_video.mp4 and later implement on full project_video.mp4) and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles.
-* Estimate a bounding box for vehicles detected.
+classifier.fit(features, labels)
+```
 
-Here are links to the labeled data for [vehicle](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/vehicles.zip) and [non-vehicle](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/non-vehicles.zip) examples to train your classifier.  These example images come from a combination of the [GTI vehicle image database](http://www.gti.ssr.upm.es/data/Vehicle_database.html), the [KITTI vision benchmark suite](http://www.cvlibs.net/datasets/kitti/), and examples extracted from the project video itself.   You are welcome and encouraged to take advantage of the recently released [Udacity labeled dataset](https://github.com/udacity/self-driving-car/tree/master/annotations) to augment your training data.  
+#### Params:
+`class_files` - list of paths to image files used for training
+`class_label` - label of class 
+`feature_types` - list of feature types to be generated, features of different types concatenated to a single feature vector. Can be 'HOG', 'SPAT', 'HIST'
+`hog_color_transform` - cv2 color transform flag used to convert images to 1-channel image. I.e.: `cv2.COLOR_BGR2GRAY`
+`hog_pix_per_cell` - number of pixels in HOG cell
+`hog_cell_per_block` - number of cell per HOG block (in each dimention)
+`hog_orient` - number of HOG orientations
+`color_transform_flag` - cv2 color transform used for getting spatial features and histogram features, i.e. `cv2.COLOR_BGR2HSL`
+`spat_size` - tuple of integers used to resize images before getting spatial features. 
+`hist_channels` - color channels after color transformation (if any) used to generate histogram features
+`hist_nbins` - number of bins of histogram for each color channel
+`hist_bins_range` - parameter used in `np.histogram` as `range`
 
-Some example images for testing your pipeline on single frames are located in the `test_images` folder.  To help the reviewer examine your work, please save examples of the output from each stage of your pipeline in the folder called `ouput_images`, and include them in your writeup for the project by describing what each image shows.    The video called `project_video.mp4` is the video your pipeline should work well on.  
+```
+# usage for getting features of image for further detection and tracking:
+whole_image_features = feature_extractor.return_sliding_features(img, ymin, ymax, xmin, xmax, feature_types=['HOG', 'SPAT', 'HIST'],
+										                           init_size=(64,64), scale=1, step=0.125,
+										                           cell_size=8, hog_color_transform=cv2.COLOR_BGR2GRAY,
+										                           color_transform=None, spat_size=(32,32),
+										                           hist_channels=[0], hist_nbins=32, hist_bins_range=(0,256))
+```
 
-**As an optional challenge** Once you have a working pipeline for vehicle detection, add in your lane-finding algorithm from the last project to do simultaneous lane-finding and vehicle detection!
-
-**If you're feeling ambitious** (also totally optional though), don't stop there!  We encourage you to go out and take video of your own, and show us how you would implement this project on a new video!
-
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
-
+#### Params:
+`img` - image to get features from
+`ymin, ymax, xmin, xmax` - boundaries of region of search
+`feature_types` - list of feature types to be generated, features of different types concatenated to a single feature vector. Can be 'HOG', 'SPAT', 'HIST'
+`init_size` - size of image used for training classifier 
+`scale` - search window size related to `init_size`
+`step` - search step (in parts of searching window size)
+`hog_color_transform` - cv2 color transform flag used to convert images to 1-channel image. I.e.: `cv2.COLOR_BGR2GRAY`
+`hog_pix_per_cell` - number of pixels in HOG cell
+`hog_cell_per_block` - number of cell per HOG block (in each dimention)
+`hog_orient` - number of HOG orientations
+`color_transform_flag` - cv2 color transform used for getting spatial features and histogram features, i.e. `cv2.COLOR_BGR2HSL`
+`spat_size` - tuple of integers used to resize images before getting spatial features. 
+`hist_channels` - color channels after color transformation (if any) used to generate histogram features
+`hist_nbins` - number of bins of histogram for each color channel
+`hist_bins_range` - parameter used in `np.histogram` as `range`
